@@ -91,33 +91,33 @@ target_compile_options(fmt PRIVATE $<$<CXX_COMPILER_ID:IntelLLVM>:-Wno-tautologi
 external_dependency(itertools
   GIT_REPO https://github.com/TRIQS/itertools
   VERSION 1.3
-  GIT_TAG unstable
+  GIT_TAG 1.3.x
 )
 
 # -- mpi --
 external_dependency(mpi
   GIT_REPO https://github.com/TRIQS/mpi
   VERSION 1.3
-  GIT_TAG unstable
+  GIT_TAG 1.3.x
 )
 
 # -- h5 --
 external_dependency(h5
   GIT_REPO https://github.com/TRIQS/h5
   VERSION 1.3
-  GIT_TAG unstable
+  GIT_TAG 1.3.x
 )
 
 # -- nda --
 external_dependency(nda
   GIT_REPO https://github.com/TRIQS/nda
   VERSION 1.3
-  GIT_TAG unstable
+  GIT_TAG 1.3.x
 ) 
 
 # -- cppdlr --
 external_dependency(cppdlr
   GIT_REPO https://github.com/flatironinstitute/cppdlr
   VERSION 1.1
-  GIT_TAG main
+  GIT_TAG 1.1.x
 )
