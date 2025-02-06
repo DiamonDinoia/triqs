@@ -39,9 +39,51 @@ static void GfDLREval(benchmark::State &state) {
   auto G_dlr_coeff = make_gf_dlr(G);
 
   for (auto _ : state) {
-    for (auto tau : mesh) benchmark::DoNotOptimize(G_dlr_coeff(double(tau)));
+    for (auto tau : mesh) {
+      // Are there some low-hanging performance improvements here?
+      benchmark::DoNotOptimize(G_dlr_coeff(double(tau)));
+    }
   }
 }
 BENCHMARK(GfDLREval)->RangeMultiplier(2)->Range(1024, 8192);
+
+static void GfLegEval(benchmark::State &state) {
+
+  double beta  = 2.0;
+  double w_max = 5.0;
+  double eps   = 1e-10;
+  double omega = 1.337;
+
+  auto mesh = dlr_imtime{beta, Fermion, w_max, eps};
+  auto G    = gf<dlr_imtime, scalar_valued>{mesh};
+  G[tau_] << onefermion(tau_, omega, beta);
+
+  auto const n_l = 15;
+  int n_tau      = 10001;
+  auto mesh_l    = legendre(beta, Fermion, n_l);
+  auto Gl        = gf<legendre, scalar_valued>{mesh_l};
+  legendre_matsubara_inverse(Gl, make_gf_imtime(G, n_tau));
+
+  // Directly perform integral in GDLR ImTime
+  // Q: What is the best sampling for the integral?
+  // legendre_matsubara_inverse(Gl, G);
+  // legendre_matsubara_inverse(Gl, Gcoeff);
+
+  // Possible utility function API
+  // make_gf_legendre(Gcoeff, n_l);
+  // make_gf_legendre(G, n_l, n_tau);
+  // make_gf_legendre(G, eps);
+  // Q: How to choose eps / n_l?
+
+  // Q: Do we want a paneled / piecewise version at all?
+
+  for (auto _ : state) {
+    for (auto tau : mesh) {
+      // Are there some low-hanging performance improvements here?
+      benchmark::DoNotOptimize(Gl(double(tau)));
+    }
+  }
+}
+BENCHMARK(GfLegEval)->RangeMultiplier(2)->Range(1024, 8192);
 
 BENCHMARK_MAIN();
