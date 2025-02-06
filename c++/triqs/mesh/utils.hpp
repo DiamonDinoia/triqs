@@ -94,11 +94,45 @@ namespace triqs::mesh {
   namespace details {
 
     // FIXME use ranges::views, but clang > 15 only
-    auto sum_to_regular(auto const &R, auto f) {
+    auto sum_to_regular_chunk(auto const &R, auto f) {
       auto it  = std::begin(R);
       auto e   = std::end(R);
       auto res = make_regular(f(*it));
       for (++it; it != e; ++it) res += f(*it);
+      return res;
+    }
+
+    // FIXME use ranges::views, but clang > 15 only
+    auto sum_to_regular(auto const &R, auto f) {
+      auto it                 = std::begin(R);
+      auto e                  = std::end(R);
+      // return sum_to_regular_chunk(R, f);
+      const size_t n          = std::distance(it, e);
+
+      constexpr auto vec_size = 8;
+      if (n < vec_size) return sum_to_regular_chunk(R, f);
+      const auto evaluate = [f](const auto x) { return make_regular(f(*x)); };
+      using result_type   = std::invoke_result_t<decltype(evaluate), decltype(it)>;
+      std::array<result_type, vec_size> results{};
+#pragma clang loop unroll(full) vectorize(enable)
+      for (size_t i = 0; i < vec_size; ++i) {
+        results[i] = evaluate(it++);
+      }
+#pragma clang loop unroll(full) vectorize(enable)
+      for (size_t i = vec_size; i < (n & -vec_size); i += vec_size) {
+        for (size_t j = 0; j < vec_size; ++j) {
+          results[j] += f(*it++);
+        }
+      }
+      result_type res = results[0];
+#pragma clang loop unroll(full) vectorize(enable)
+      for (size_t i = 1; i < vec_size; ++i) {
+        res += results[i];
+      }
+#pragma clang loop unroll(full) vectorize(enable)
+      for (size_t i = n & (-vec_size); i < n; ++i) {
+        res += f(*it++);
+      }
       return res;
     }
 
