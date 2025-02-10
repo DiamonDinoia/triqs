@@ -1,4 +1,6 @@
 # The list of benchs
+
+
 file(GLOB_RECURSE all_benchs RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} *.cpp)
 
 foreach(bench ${all_benchs})
