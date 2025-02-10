@@ -45,7 +45,7 @@ static void GfDLREval(benchmark::State &state) {
     }
   }
 }
-BENCHMARK(GfDLREval)->RangeMultiplier(2)->Range(1024, 8192)->Iterations(250000);
+BENCHMARK(GfDLREval)->RangeMultiplier(2)->Range(1024, 8192);
 
 static void GfLegEval(benchmark::State &state) {
 
@@ -84,6 +84,6 @@ static void GfLegEval(benchmark::State &state) {
     }
   }
 }
-BENCHMARK(GfLegEval)->RangeMultiplier(2)->Range(1024, 8192)->Iterations(250000);
+BENCHMARK(GfLegEval)->RangeMultiplier(2)->Range(1024, 8192);
 
 BENCHMARK_MAIN();
