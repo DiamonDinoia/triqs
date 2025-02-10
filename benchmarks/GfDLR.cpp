@@ -18,6 +18,8 @@
 #include <benchmark/benchmark.h>
 #include <triqs/gfs.hpp>
 #include <triqs/mesh.hpp>
+#include <baobzi_template.hpp>
+
 
 // ===== Interpolate DLR ImTime Green function
 
@@ -45,7 +47,7 @@ static void GfDLREval(benchmark::State &state) {
     }
   }
 }
-BENCHMARK(GfDLREval)->RangeMultiplier(2)->Range(1024, 8192);
+BENCHMARK(GfDLREval)->RangeMultiplier(2)->Range(1024, 8192)->Iterations(250000);
 
 static void GfLegEval(benchmark::State &state) {
 
@@ -84,6 +86,67 @@ static void GfLegEval(benchmark::State &state) {
     }
   }
 }
-BENCHMARK(GfLegEval)->RangeMultiplier(2)->Range(1024, 8192);
+BENCHMARK(GfLegEval)->RangeMultiplier(2)->Range(1024, 8192)->Iterations(250000);
+
+
+static void GfDLREvalFast(benchmark::State &state) {
+  double beta  = 2.0;
+  double w_max = 5.0;
+  double eps   = 1e-10;
+  double omega = 1.337;
+
+  auto mesh = dlr_imtime{beta, Fermion, w_max, eps};
+  auto G    = gf<dlr_imtime, scalar_valued>{mesh};
+  G[tau_] << onefermion(tau_, omega, beta);
+  auto G_dlr_coeff = make_gf_dlr(G);
+
+  auto input_funct = [&G_dlr_coeff](const double * x, double * res, const void * ) {
+    const auto eval = G_dlr_coeff(*x);
+    res[0] = real(eval);
+    res[1] = imag(eval);
+  };
+
+  baobzi_input_t input;
+  input.output_dim = 2;
+  input.tol = 1e-10;
+  // input.order = 12;
+  input.split_multi_eval = false;
+
+  const std::array center {0.0};
+  const std::array half_length {w_max * beta};
+
+  // use std ranges to iterate over mesh and append tau to samples
+  std::vector<double> samples(mesh.size());
+  std::ranges::transform(mesh, samples.begin(), [](auto tau) { return double(tau); });
+
+  const baobzi::Function<1, 8> func(&input, center.data(), half_length.data(), input_funct, samples);
+
+
+  const auto fast_dlr = [&func] (const double x) {
+    std::array<double, 2> res{};
+    func(&x, res.data());
+    return dcomplex(res[0], res[1]);
+  };
+
+  for (auto tau : mesh) {
+    // check relative error
+    auto eval = G_dlr_coeff(double(tau));
+    auto res = fast_dlr(double(tau));
+    if (1 - std::abs(eval / res) > input.tol) {
+      std::cerr << "Error: " << tau << " " << eval << " " << res << std::endl;
+    }
+  }
+
+
+  for (auto _ : state) {
+    for (auto tau : mesh) {
+      // Are there some low-hanging performance improvements here?
+      benchmark::DoNotOptimize(fast_dlr(double(tau)));
+    }
+  }
+}
+
+BENCHMARK(GfDLREvalFast)->RangeMultiplier(2)->Range(1024, 8192)->Iterations(250000);
+
 
 BENCHMARK_MAIN();
