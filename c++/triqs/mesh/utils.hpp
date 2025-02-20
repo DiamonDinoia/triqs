@@ -104,35 +104,32 @@ namespace triqs::mesh {
 
     // FIXME use ranges::views, but clang > 15 only
     auto sum_to_regular(auto const &R, auto f) {
-      auto it                 = std::begin(R);
-      auto e                  = std::end(R);
+      auto it = std::begin(R), e = std::end(R);
       // return sum_to_regular_chunk(R, f);
-      const size_t n          = std::distance(it, e);
+      const size_t n = std::distance(it, e);
 
       constexpr auto vec_size = 8;
-      if (n < vec_size) return sum_to_regular_chunk(R, f);
+      if (n < vec_size) return sum_to_regular_chunk(R, std::move(f));
       const auto evaluate = [f](const auto x) { return make_regular(f(*x)); };
       using result_type   = std::invoke_result_t<decltype(evaluate), decltype(it)>;
-      std::array<result_type, vec_size> results{};
+      alignas(64) std::array<result_type, vec_size> results{};
+
 #pragma clang loop unroll(full) vectorize(enable)
-      for (size_t i = 0; i < vec_size; ++i) {
-        results[i] = evaluate(it++);
-      }
+#pragma GCC ivdep unroll(vec_size)
+      for (auto i = 0; i < vec_size; ++i) { results[i] = evaluate(std::next(it, i)); }
+      std::advance(it, vec_size); // Move the iterator forward by vec_size
+
+      for (auto i = vec_size; i < (n & -vec_size); i += vec_size) {
+#pragma GCC ivdep unroll(vec_size)
 #pragma clang loop unroll(full) vectorize(enable)
-      for (size_t i = vec_size; i < (n & -vec_size); i += vec_size) {
-        for (size_t j = 0; j < vec_size; ++j) {
-          results[j] += f(*it++);
-        }
+        for (auto j = 0; j < vec_size; ++j) { results[j] += f(*std::next(it, j)); }
+        std::advance(it, vec_size); // Move the iterator forward by vec_size
       }
+
       result_type res = results[0];
-#pragma clang loop unroll(full) vectorize(enable)
-      for (size_t i = 1; i < vec_size; ++i) {
-        res += results[i];
-      }
-#pragma clang loop unroll(full) vectorize(enable)
-      for (size_t i = n & (-vec_size); i < n; ++i) {
-        res += f(*it++);
-      }
+      for (auto i = 1; i < vec_size; ++i) { res += results[i]; }
+
+      for (auto i = n & (-vec_size); i < n; ++i) { res += f(*it++); }
       return res;
     }
 
