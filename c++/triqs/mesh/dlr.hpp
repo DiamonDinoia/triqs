@@ -19,11 +19,15 @@
 #pragma once
 #include "utils.hpp"
 #include "domains/matsubara.hpp"
+
+#include <list>
 #include <cppdlr/cppdlr.hpp>
-#include <memory>
+
+#include <functional>
+#include <tuple>
+#include <boost/container/flat_map.hpp>
 
 namespace triqs::mesh {
-
   struct dlr_imtime;
   struct dlr_imfreq;
 
@@ -49,6 +53,7 @@ namespace triqs::mesh {
     bool _symmetrize                    = false;
     uint64_t _mesh_hash                 = 0;
     std::shared_ptr<const dlr_ops> _dlr = {};
+
 
     // -------------------- Constructors -------------------
     public:
@@ -117,6 +122,8 @@ namespace triqs::mesh {
       long _data_index    = 0;
       uint64_t _mesh_hash = 0;
       double _value       = {};
+
+
 
       public:
       mesh_point_t() = default;
@@ -278,16 +285,72 @@ namespace triqs::mesh {
   };
 
   // -------------------- evaluation -------------------
+  // A fixed-signature LRU cache using boost::container::flat_map.
+  // Template parameters:
+  //    R         - return type of the cached function
+  //    Args...   - function argument types
+  //    CACHE_SIZE - maximum number of cached items
+  template <typename R, typename... Args>
+  class Cache {
+    public:
+    using Function = std::function<R(Args...)>;
+
+    explicit Cache(Function func)
+      : func_(std::move(func)) {}
+
+    R operator ()(Args const &... keys) { return get(keys...); }
+
+    private:
+
+    using Key = std::tuple<std::decay_t<Args>...>;
+    static constexpr auto CACHE_SIZE = 1024;
+
+    // Look up or compute the value for the given keys.
+    R get(const Args&... keys) {
+      Key key = std::make_tuple(keys...);
+      auto it = cache_map_.find(key);
+      if (it != cache_map_.end()) {
+        // Move the accessed key to the front (most recently used)
+        cache_list_.splice(cache_list_.begin(), cache_list_, it->second.second);
+        return it->second.first;
+      }
+      R value = func_(keys...);
+      insert(key, value);
+      return value;
+    }
+
+    // Insert a new key/value pair, evicting the least recently used if necessary.
+    void insert(const Key& key, const R& value) {
+      if (cache_map_.size() >= CACHE_SIZE) {
+        // Evict the least recently used item (back of the list)
+        auto last = cache_list_.end();
+        --last;
+        cache_map_.erase(*last);
+        cache_list_.pop_back();
+      }
+      cache_list_.push_front(key);
+      cache_map_[key] = {value, cache_list_.begin()};
+    }
+
+    Function func_;
+    std::list<Key> cache_list_;
+    // Use Boost's flat_map as the underlying cache map
+    boost::container::flat_map<Key, std::pair<R, typename std::list<Key>::iterator>> cache_map_;
+  };
+
+  namespace {
+    inline Cache<double, double, double> k_it_cache{static_cast<double(*)(double, double)>(cppdlr::k_it)};
+  }
 
   auto evaluate(dlr const &m, auto const &f, double tau) {
     EXPECTS(m.size() > 0);
-    return details::sum_to_regular(range(m.size()), [&](auto &&l) { return f(l) * cppdlr::k_it(tau / m.beta(), m.dlr_freq()[l]); });
+    return details::sum_to_regular(range(m.size()), [&](auto &&l) { return f(l) * k_it_cache(tau / m.beta(), m.dlr_freq()[l]); });
   }
 
   auto evaluate(dlr const &m, auto const &f, matsubara_freq const &iw) {
     EXPECTS(m.size() > 0);
     return details::sum_to_regular(
-       range(m.size()), [&](auto &&l) { return f(l) * cppdlr::k_if(iw.n, m.dlr_freq()[l], (cppdlr::statistic_t)iw.statistic) * m.beta(); });
+       range(m.size()), [&](auto &&l) { return f(l) * cppdlr::k_it(iw.n, m.dlr_freq()[l], (cppdlr::statistic_t)iw.statistic) * m.beta(); });
   }
 
   // check concept
