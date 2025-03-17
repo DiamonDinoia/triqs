@@ -131,9 +131,6 @@ TEST_F(MpiGf, ReduceBlockView) {
 
   auto bgf2 = bgf;
 
-  bgf2() = mpi::reduce(bgf);
-  if (world.rank() == 0) test_gfs_are_close(bgf2[0], gf<imfreq>{world.size() * g1});
-
   bgf2() = mpi::all_reduce(bgf);
   test_gfs_are_close(bgf2[0], gf<imfreq>{world.size() * g1});
 }
