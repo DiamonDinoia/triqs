@@ -23,15 +23,12 @@
 #include <list>
 #include <cppdlr/cppdlr.hpp>
 
-#include <functional>
+#include <memory_resource>
 #include <tuple>
-#include <boost/container/flat_map.hpp>
-#include <boost/unordered_map.hpp>
 #include <boost/functional/hash.hpp>
-#include <boost/unordered/unordered_flat_map.hpp>
 #include <hash_table7.hpp>
-
-
+#include <boost/container/list.hpp>
+#include <boost/container/slist.hpp>
 
 namespace triqs::mesh {
   struct dlr_imtime;
@@ -299,36 +296,35 @@ namespace triqs::mesh {
   template <typename R, typename... Args>
   class Cache {
     public:
-    using Function = std::function<R(Args...)>;
+    // Function pointer type, is faster than std::function.
+    // But it can only store plain functions, not lambdas or functors.
+    using Function = R(*)(Args...);
     using Key = std::tuple<std::decay_t<Args>...>;
     // Each list node holds a key and its cached result.
-    using ListIt = typename std::list<std::pair<Key, R>>::iterator;
 
+    static constexpr auto capacity = 1024;
     // Optionally set capacity (default 1024)
-    explicit Cache(Function func, size_t capacity = 1024)
-        : func_(std::move(func)), capacity_(capacity), cacheMap_(capacity) {
+    constexpr explicit Cache(Function func)
+        : func(std::move(func)), cacheMap_(capacity) {
     }
 
-    R operator()(const Args&... args) {
+    constexpr R operator()(const Args&... args) noexcept {
       Key key = std::make_tuple(args...);
-      auto it = cacheMap_.find(key);
-      if (it != cacheMap_.end()) {
+      if (auto&& it = cacheMap_.find(key); it != cacheMap_.end()) {
         // Move accessed item to the front (most recently used)
         cacheList_.splice(cacheList_.begin(), cacheList_, it->second);
-        return it->second->second;
+        return cacheList_.begin()->second;
       }
-      R result = func_(args...);
+      R result = func(args...);
       put(key, result);
       return result;
     }
 
     private:
-    void put(const Key& key, const R& result) {
-      if (cacheList_.size() >= capacity_) {
+    constexpr void put(const Key& key, const R& result) noexcept {
+      if (cacheList_.size() >= capacity) {
         // Evict the least recently used item (back of list)
-        auto last = cacheList_.end();
-        --last;
-        cacheMap_.erase(last->first);
+        cacheMap_.erase((--cacheList_.end())->first);
         cacheList_.pop_back();
       }
       // Insert new item at the front.
@@ -336,15 +332,19 @@ namespace triqs::mesh {
       cacheMap_[key] = cacheList_.begin();
     }
 
-    Function func_;
-    size_t capacity_;
+    Function func;
+    // monotonic allocator for the list to avoid dynamic memory allocation
+    alignas(64) std::array<std::pair<Key, R>, capacity> buffer; // enough to fit in all nodes
+    std::pmr::monotonic_buffer_resource mbr{buffer.data(), buffer.size()};
+    std::pmr::polymorphic_allocator<std::pair<Key, R>> pa{&mbr};
     // Doubly-linked list to maintain LRU order.
-    std::list<std::pair<Key, R>> cacheList_;
+    std::pmr::list<std::pair<Key, R>> cacheList_{pa};
+    using ListIt = typename decltype(cacheList_)::iterator;
     // Unordered map for O(1) key lookup; using Boost hash for std::tuple.
     emhash7::HashMap<Key, ListIt, boost::hash<Key>> cacheMap_;
   };
 
-  inline Cache<double, double, double> k_it_cache{static_cast<double(*)(double, double)>(cppdlr::k_it)};
+  static inline Cache k_it_cache{static_cast<double(*)(double, double)>(cppdlr::k_it)};
 
   auto evaluate(dlr const &m, auto const &f, double tau) {
     EXPECTS(m.size() > 0);
