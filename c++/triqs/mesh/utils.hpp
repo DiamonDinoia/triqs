@@ -93,6 +93,7 @@ namespace triqs::mesh {
 
   namespace details {
 
+#ifdef TRIQS_ENABLE_VECTORIZE
     // FIXME use ranges::views, but clang > 15 only
     auto sum_to_regular_chunk(auto const &R, auto f) {
       auto it  = std::begin(R);
@@ -102,10 +103,16 @@ namespace triqs::mesh {
       return res;
     }
 
-    // FIXME use ranges::views, but clang > 15 only
+    template <std::size_t... Is> void unroll_loop(auto it, auto f, auto &results, std::index_sequence<Is...>) {
+      ((results[Is] = f(std::next(it, Is))), ...);
+    }
+
+    template <std::size_t... Is> void unroll_loop_add(auto it, auto f, auto &results, std::index_sequence<Is...>) {
+      ((results[Is] += f(*std::next(it, Is))), ...);
+    }
+
     auto sum_to_regular(auto const &R, auto f) {
       auto it = std::begin(R), e = std::end(R);
-      // return sum_to_regular_chunk(R, f);
       const size_t n = std::distance(it, e);
 
       constexpr auto vec_size = 8;
@@ -114,15 +121,11 @@ namespace triqs::mesh {
       using result_type   = std::invoke_result_t<decltype(evaluate), decltype(it)>;
       alignas(64) std::array<result_type, vec_size> results{};
 
-#pragma clang loop unroll(full) vectorize(enable)
-#pragma GCC ivdep unroll(vec_size)
-      for (auto i = 0; i < vec_size; ++i) { results[i] = evaluate(std::next(it, i)); }
+      unroll_loop(it, evaluate, results, std::make_index_sequence<vec_size>{});
       std::advance(it, vec_size); // Move the iterator forward by vec_size
 
       for (auto i = vec_size; i < (n & -vec_size); i += vec_size) {
-#pragma GCC ivdep unroll(vec_size)
-#pragma clang loop unroll(full) vectorize(enable)
-        for (auto j = 0; j < vec_size; ++j) { results[j] += f(*std::next(it, j)); }
+        unroll_loop_add(it, f, results, std::make_index_sequence<vec_size>{});
         std::advance(it, vec_size); // Move the iterator forward by vec_size
       }
 
@@ -132,7 +135,15 @@ namespace triqs::mesh {
       for (auto i = n & (-vec_size); i < n; ++i) { res += f(*it++); }
       return res;
     }
-
+#else
+    auto sum_to_regular(auto const &R, auto f) {
+      auto it  = std::begin(R);
+      auto e   = std::end(R);
+      auto res = make_regular(f(*it));
+      for (++it; it != e; ++it) res += f(*it);
+      return res;
+    }
+#endif
   } // namespace details
 
 } // namespace triqs::mesh

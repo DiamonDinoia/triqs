@@ -26,6 +26,12 @@
 #include <functional>
 #include <tuple>
 #include <boost/container/flat_map.hpp>
+#include <boost/unordered_map.hpp>
+#include <boost/functional/hash.hpp>
+#include <boost/unordered/unordered_flat_map.hpp>
+#include <hash_table7.hpp>
+
+
 
 namespace triqs::mesh {
   struct dlr_imtime;
@@ -294,53 +300,51 @@ namespace triqs::mesh {
   class Cache {
     public:
     using Function = std::function<R(Args...)>;
-
-    explicit Cache(Function func)
-      : func_(std::move(func)) {}
-
-    R operator ()(Args const &... keys) { return get(keys...); }
-
-    private:
-
     using Key = std::tuple<std::decay_t<Args>...>;
-    static constexpr auto CACHE_SIZE = 1024;
+    // Each list node holds a key and its cached result.
+    using ListIt = typename std::list<std::pair<Key, R>>::iterator;
 
-    // Look up or compute the value for the given keys.
-    R get(const Args&... keys) {
-      Key key = std::make_tuple(keys...);
-      auto it = cache_map_.find(key);
-      if (it != cache_map_.end()) {
-        // Move the accessed key to the front (most recently used)
-        cache_list_.splice(cache_list_.begin(), cache_list_, it->second.second);
-        return it->second.first;
-      }
-      R value = func_(keys...);
-      insert(key, value);
-      return value;
+    // Optionally set capacity (default 2048)
+    explicit Cache(Function func, size_t capacity = 2048)
+        : func_(std::move(func)), capacity_(capacity), cacheMap_(capacity) {
     }
 
-    // Insert a new key/value pair, evicting the least recently used if necessary.
-    void insert(const Key& key, const R& value) {
-      if (cache_map_.size() >= CACHE_SIZE) {
-        // Evict the least recently used item (back of the list)
-        auto last = cache_list_.end();
-        --last;
-        cache_map_.erase(*last);
-        cache_list_.pop_back();
+    R operator()(const Args&... args) {
+      Key key = std::make_tuple(args...);
+      auto it = cacheMap_.find(key);
+      if (it != cacheMap_.end()) {
+        // Move accessed item to the front (most recently used)
+        cacheList_.splice(cacheList_.begin(), cacheList_, it->second);
+        return it->second->second;
       }
-      cache_list_.push_front(key);
-      cache_map_[key] = {value, cache_list_.begin()};
+      R result = func_(args...);
+      put(key, result);
+      return result;
+    }
+
+    private:
+    void put(const Key& key, const R& result) {
+      if (cacheList_.size() >= capacity_) {
+        // Evict the least recently used item (back of list)
+        auto last = cacheList_.end();
+        --last;
+        cacheMap_.erase(last->first);
+        cacheList_.pop_back();
+      }
+      // Insert new item at the front.
+      cacheList_.emplace_front(key, result);
+      cacheMap_[key] = cacheList_.begin();
     }
 
     Function func_;
-    std::list<Key> cache_list_;
-    // Use Boost's flat_map as the underlying cache map
-    boost::container::flat_map<Key, std::pair<R, typename std::list<Key>::iterator>> cache_map_;
+    size_t capacity_;
+    // Doubly-linked list to maintain LRU order.
+    std::list<std::pair<Key, R>> cacheList_;
+    // Unordered map for O(1) key lookup; using Boost hash for std::tuple.
+    emhash7::HashMap<Key, ListIt, boost::hash<Key>> cacheMap_;
   };
 
-  namespace {
-    inline Cache<double, double, double> k_it_cache{static_cast<double(*)(double, double)>(cppdlr::k_it)};
-  }
+  inline Cache<double, double, double> k_it_cache{static_cast<double(*)(double, double)>(cppdlr::k_it)};
 
   auto evaluate(dlr const &m, auto const &f, double tau) {
     EXPECTS(m.size() > 0);
