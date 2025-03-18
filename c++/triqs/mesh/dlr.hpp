@@ -304,8 +304,8 @@ namespace triqs::mesh {
     // Each list node holds a key and its cached result.
     using ListIt = typename std::list<std::pair<Key, R>>::iterator;
 
-    // Optionally set capacity (default 2048)
-    explicit Cache(Function func, size_t capacity = 2048)
+    // Optionally set capacity (default 1024)
+    explicit Cache(Function func, size_t capacity = 1024)
         : func_(std::move(func)), capacity_(capacity), cacheMap_(capacity) {
     }
 
@@ -354,7 +354,7 @@ namespace triqs::mesh {
   auto evaluate(dlr const &m, auto const &f, matsubara_freq const &iw) {
     EXPECTS(m.size() > 0);
     return details::sum_to_regular(
-       range(m.size()), [&](auto &&l) { return f(l) * cppdlr::k_it(iw.n, m.dlr_freq()[l], (cppdlr::statistic_t)iw.statistic) * m.beta(); });
+       range(m.size()), [&](auto &&l) { return f(l) * cppdlr::k_if(iw.n, m.dlr_freq()[l], (cppdlr::statistic_t)iw.statistic) * m.beta(); });
   }
 
   // check concept

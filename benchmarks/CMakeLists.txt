@@ -23,7 +23,9 @@ foreach(bench ${all_benchs})
   add_executable(${bench_name} ${bench})
   target_link_libraries(${bench_name} triqs triqs_warnings benchmark_main baobzi)
   set_property(TARGET ${bench_name} PROPERTY RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${bench_dir})
+  set_target_properties(${bench_name} PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE})
   #add_bench(NAME ${bench_name} COMMAND ${bench_name} WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${bench_dir})
+
   # Run clang-tidy if found
   if(CLANG_TIDY_EXECUTABLE)
     set_target_properties(${bench_name} PROPERTIES CXX_CLANG_TIDY "${CLANG_TIDY_EXECUTABLE}")

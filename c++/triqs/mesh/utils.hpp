@@ -93,6 +93,7 @@ namespace triqs::mesh {
 
   namespace details {
 
+#define TRIQS_ENABLE_VECTORIZE
 #ifdef TRIQS_ENABLE_VECTORIZE
     // FIXME use ranges::views, but clang > 15 only
     auto sum_to_regular_chunk(auto const &R, auto f) {
@@ -114,7 +115,6 @@ namespace triqs::mesh {
     auto sum_to_regular(auto const &R, auto f) {
       auto it = std::begin(R), e = std::end(R);
       const size_t n = std::distance(it, e);
-
       constexpr auto vec_size = 8;
       if (n < vec_size) return sum_to_regular_chunk(R, std::move(f));
       const auto evaluate = [f](const auto x) { return make_regular(f(*x)); };
