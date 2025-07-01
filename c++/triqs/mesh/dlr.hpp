@@ -57,7 +57,6 @@ namespace triqs::mesh {
     uint64_t _mesh_hash                 = 0;
     std::shared_ptr<const dlr_ops> _dlr = {};
 
-
     // -------------------- Constructors -------------------
     public:
     dlr() = default;
@@ -125,8 +124,6 @@ namespace triqs::mesh {
       long _data_index    = 0;
       uint64_t _mesh_hash = 0;
       double _value       = {};
-
-
 
       public:
       mesh_point_t() = default;
@@ -348,6 +345,7 @@ namespace triqs::mesh {
 
   auto evaluate(dlr const &m, auto const &f, double tau) {
     EXPECTS(m.size() > 0);
+    EXPECTS(tau >= 0 and tau <= m.beta());
     return details::sum_to_regular(range(m.size()), [&](auto &&l) { return f(l) * k_it_cache(tau / m.beta(), m.dlr_freq()[l]); });
   }
 
