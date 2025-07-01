@@ -31,7 +31,7 @@ foreach (bench ${all_benchs})
     set_property(TARGET ${bench_name} PROPERTY RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${bench_dir})
     set_target_properties(${bench_name} PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE} CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
     #add_bench(NAME ${bench_name} COMMAND ${bench_name} WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${bench_dir})
-
+    target_compile_options(${bench_name} PRIVATE -march=native -O3 -ftree-vectorize -fcx-fortran-rules -fcx-limited-range -ffp-contract=fast)
     # Run clang-tidy if found
     if (CLANG_TIDY_EXECUTABLE)
         set_target_properties(${bench_name} PROPERTIES CXX_CLANG_TIDY "${CLANG_TIDY_EXECUTABLE}")
