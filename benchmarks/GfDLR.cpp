@@ -130,7 +130,7 @@ static void GfDLREvalFast(benchmark::State &state) {
     // check relative error
     auto eval = G_dlr_coeff(double(tau));
     auto res  = fast_dlr(double(tau));
-    if (1 - std::abs(eval / res) > input.tol) { std::cerr << "Error: " << tau << " " << eval << " " << res << std::endl; }
+    if (std::abs(1 - eval / res) > input.tol) { std::cerr << "Error: " << tau << " " << eval << " " << res << std::endl; }
   }
 
   for (auto _ : state) {
@@ -144,55 +144,41 @@ static void GfDLREvalFast(benchmark::State &state) {
 BENCHMARK(GfDLREvalFast)->RangeMultiplier(2)->Range(1024, 8192)->Iterations(250000);
 
 static void GfDLREvalMon(benchmark::State &state) {
-  double beta  = 2.0;
-  double w_max = 5.0;
-  double eps   = 1e-10;
-  double omega = 1.337;
+  constexpr double beta                     = 2.0;
+  constexpr double w_max                    = 5.0; // domain is -w_max * beta, w_max * beta
+  constexpr double eps                      = 1e-10;
+  constexpr double omega                    = 1.337;
+  constexpr size_t COMPILE_TIME_MAX_N       = 32;
+  constexpr size_t COMPILE_TIME_EVAL_POINTS = 200;
 
   auto mesh = dlr_imtime{beta, Fermion, w_max, eps};
   auto G    = gf<dlr_imtime, scalar_valued>{mesh};
   G[tau_] << onefermion(tau_, omega, beta);
   auto G_dlr_coeff = make_gf_dlr(G);
 
-  auto input_funct = [&G_dlr_coeff](const double *x, double *res, const void *) {
-    const auto eval = G_dlr_coeff(*x);
-    res[0]          = real(eval);
-    res[1]          = imag(eval);
-  };
-
-  baobzi_input_t input;
-  input.output_dim = 2;
-  input.tol        = 1e-10;
-  // input.order = 12;
-  input.split_multi_eval = false;
-
-  const std::array center{0.0};
-  const std::array half_length{w_max * beta};
-
   // use std ranges to iterate over mesh and append tau to samples
   std::vector<double> samples(mesh.size());
   std::ranges::transform(mesh, samples.begin(), [](auto tau) { return double(tau); });
 
-  const baobzi::Function<1, 8> func(&input, center.data(), half_length.data(), input_funct, samples);
-
-  const auto fast_dlr = [&func](const double x) {
-    std::array<double, 2> res{};
-    func(&x, res.data());
-    return dcomplex(res[0], res[1]);
-  };
+  const auto fast_dlr = poly_eval::make_func_eval<eps, COMPILE_TIME_MAX_N, COMPILE_TIME_EVAL_POINTS>(
+     [G_dlr_coeff](double x) {
+       const auto res = G_dlr_coeff(x);
+       return std::complex<double>(real(res), imag(res));
+     },
+     0, beta);
 
   for (auto tau : mesh) {
     // check relative error
     auto eval = G_dlr_coeff(double(tau));
     auto res  = fast_dlr(double(tau));
-    if (std::abs(1 - eval / res) > input.tol) { std::cerr << "Error: " << tau << " " << eval << " " << res << std::endl; }
+    if (std::abs(1 - eval / res) > eps) { std::cerr << "Error: " << tau << " " << eval << " " << res << std::endl; }
   }
 
+  std::vector<std::complex<double>> res_vec(mesh.size());
+
   for (auto _ : state) {
-    for (auto tau : mesh) {
-      // Are there some low-hanging performance improvements here?
-      benchmark::DoNotOptimize(fast_dlr(double(tau)));
-    }
+    fast_dlr(samples.data(), res_vec.data(), samples.size());
+    benchmark::DoNotOptimize(res_vec);
   }
 }
 
