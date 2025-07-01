@@ -26,7 +26,7 @@ target_compile_features(triqs PUBLIC cxx_std_23)
 
 # Link to the Interface target for compiler warnings
 target_link_libraries(triqs PRIVATE $<BUILD_INTERFACE:triqs_warnings>)
-set_target_properties(triqs PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)
+
 # Compile Definitions
 option(CHECK_MEMORY "Turn on memory check" OFF)
 target_compile_definitions(triqs
