@@ -1132,7 +1132,7 @@ Returns
    {{c2py::python_typename<const typename triqs::atom_diag::atom_diag<false>::many_body_op_t &>(),
      c2py::python_typename<const typename triqs::atom_diag::atom_diag<true>::many_body_op_t &>()},
     {c2py::python_typename<const triqs::atom_diag::atom_diag<0> &>(), c2py::python_typename<const triqs::atom_diag::atom_diag<1> &>()}},
-   {c2py::python_typename<std::vector<std::vector<double>>>()});
+   {c2py::python_typename<std::vector<std::vector<triqs::atom_diag::quantum_number_t>>>()});
 static const auto _c2py_doc_26 = _c2py_fun_26.doc(
    R"DOC(
 Tabulate the eigenvalues :math:`q_{B,i}` of a quantum-number operator :math:`\hat Q`, also checking that 
@@ -1157,7 +1157,7 @@ Returns
    {{c2py::python_typename<const typename triqs::atom_diag::atom_diag<false>::many_body_op_t &>(),
      c2py::python_typename<const typename triqs::atom_diag::atom_diag<true>::many_body_op_t &>()},
     {c2py::python_typename<const triqs::atom_diag::atom_diag<0> &>(), c2py::python_typename<const triqs::atom_diag::atom_diag<1> &>()}},
-   {c2py::python_typename<std::vector<std::vector<double>>>()});
+   {c2py::python_typename<std::vector<std::vector<triqs::atom_diag::quantum_number_t>>>()});
 static const auto _c2py_doc_27 = _c2py_fun_27.doc(
    R"DOC(
 Compute the trace of a many-body operator weighted by a block-diagonal density matrix.
