@@ -55,7 +55,7 @@ Getting a list of random number generators
 ******************************************
 
 In order to have a list of all the strings describing the available random
-generators, you can call the static method ``random_generator_names``. For
+generators, you can call the free function ``random_generator_names``. For
 example::
 
   #include <iostream>
@@ -63,7 +63,7 @@ example::
 
   int main() {
     std::cout << "A list of all random generators" << std::endl << std::endl;
-    std::cout << triqs::mc_tools::random_generator::random_generator_names() << std::endl;
+    std::cout << triqs::mc_tools::random_generator_names() << std::endl;
   }
 
 
