@@ -207,6 +207,50 @@ namespace triqs::mesh {
 
   namespace detail {
 
+#define TRIQS_ENABLE_VECTORIZE
+#ifdef TRIQS_ENABLE_VECTORIZE
+    // Scalar fallback: apply f to each element of a range and sum into a regular type.
+    [[nodiscard]] auto sum_to_regular_chunk(auto const &R, auto f) {
+      auto it  = std::begin(R);
+      auto e   = std::end(R);
+      auto res = nda::make_regular(f(*it));
+      for (++it; it != e; ++it) res += f(*it);
+      return res;
+    }
+
+    template <std::size_t... Is> void unroll_loop(auto it, auto f, auto &results, std::index_sequence<Is...>) {
+      ((results[Is] = f(std::next(it, Is))), ...);
+    }
+
+    template <std::size_t... Is> void unroll_loop_add(auto it, auto f, auto &results, std::index_sequence<Is...>) {
+      ((results[Is] += f(*std::next(it, Is))), ...);
+    }
+
+    // Vectorized: accumulate into vec_size independent lanes, then reduce.
+    [[nodiscard]] auto sum_to_regular(auto const &R, auto f) {
+      auto it = std::begin(R), e = std::end(R);
+      const size_t n = std::distance(it, e);
+      constexpr auto vec_size = 8;
+      if (n < vec_size) return sum_to_regular_chunk(R, std::move(f));
+      const auto evaluate = [f](const auto x) { return nda::make_regular(f(*x)); };
+      using result_type   = std::invoke_result_t<decltype(evaluate), decltype(it)>;
+      alignas(64) std::array<result_type, vec_size> results{};
+
+      unroll_loop(it, evaluate, results, std::make_index_sequence<vec_size>{});
+      std::advance(it, vec_size); // Move the iterator forward by vec_size
+
+      for (auto i = vec_size; i < (n & -vec_size); i += vec_size) {
+        unroll_loop_add(it, f, results, std::make_index_sequence<vec_size>{});
+        std::advance(it, vec_size); // Move the iterator forward by vec_size
+      }
+
+      result_type res = results[0];
+      for (auto i = 1; i < vec_size; ++i) { res += results[i]; }
+
+      for (auto i = n & (-vec_size); i < n; ++i) { res += f(*it++); }
+      return res;
+    }
+#else
     // Apply a function to each element of a range and sum the results into a regular type.
     [[nodiscard]] auto sum_to_regular(std::ranges::forward_range auto &&rg, auto f) {
       auto it  = std::ranges::begin(rg);
@@ -215,6 +259,7 @@ namespace triqs::mesh {
       for (++it; it != e; ++it) res += f(*it);
       return res;
     }
+#endif
 
   } // namespace detail
 
