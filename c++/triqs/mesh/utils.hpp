@@ -32,7 +32,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
-#include <ranges>
 #include <span>
 #include <string_view>
 #include <tuple>
@@ -207,8 +206,6 @@ namespace triqs::mesh {
 
   namespace detail {
 
-#define TRIQS_ENABLE_VECTORIZE
-#ifdef TRIQS_ENABLE_VECTORIZE
     // Scalar fallback: apply f to each element of a range and sum into a regular type.
     [[nodiscard]] auto sum_to_regular_chunk(auto const &R, auto f) {
       auto it  = std::begin(R);
@@ -250,16 +247,6 @@ namespace triqs::mesh {
       for (auto i = n & (-vec_size); i < n; ++i) { res += f(*it++); }
       return res;
     }
-#else
-    // Apply a function to each element of a range and sum the results into a regular type.
-    [[nodiscard]] auto sum_to_regular(std::ranges::forward_range auto &&rg, auto f) {
-      auto it  = std::ranges::begin(rg);
-      auto e   = std::ranges::end(rg);
-      auto res = nda::make_regular(f(*it));
-      for (++it; it != e; ++it) res += f(*it);
-      return res;
-    }
-#endif
 
   } // namespace detail
 
