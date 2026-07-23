@@ -28,6 +28,8 @@
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 
+#include <simdrng/chacha_simd.hpp>
+
 #include <array>
 #include <cstdint>
 #include <random>
@@ -40,7 +42,38 @@
 namespace triqs::mc_tools {
 
   // Names of the supported engines; the empty string is additionally accepted as an alias for mt19937_64.
-  static const std::vector<std::string> engine_names = {"mt19937_64", "mt19937", "ranlux48", "ranlux24", "minstd_rand", "knuth_b"};
+  static const std::vector<std::string> engine_names = {"mt19937_64", "mt19937", "ranlux48", "ranlux24", "minstd_rand", "knuth_b", "chacha"};
+
+  namespace {
+    // Adaptor over simdrng's ChaCha8 that adds the iostream `<<`/`>>` operators the standard-library
+    // engines already provide, so the generic rng_model wraps and serializes it uniformly. Serialization
+    // mirrors simdrng's own state contract: the ChaCha matrix (16 u32), the result cache (8 u64) and the
+    // cache index, as whitespace-separated integers. After a refill the cache index sits at 8 (exhausted),
+    // so a restored engine resumes generating at the correct block. Seeding, drawing and refill are
+    // inherited unchanged; the SIMD batching lives inside ChaCha8Native, so the rng_model scalar refill
+    // loop still vectorizes.
+    struct chacha_engine : simdrng::ChaCha8Native {
+      using simdrng::ChaCha8Native::ChaCha8Native;
+
+      friend std::ostream &operator<<(std::ostream &os, chacha_engine const &e) {
+        for (auto w : e.getStateForSerde()) os << w << ' ';
+        for (auto v : e.result_cache()) os << v << ' ';
+        return os << static_cast<unsigned>(e.result_index());
+      }
+      friend std::istream &operator>>(std::istream &is, chacha_engine &e) {
+        matrix_type matrix{};
+        for (auto &w : matrix) is >> w;
+        result_cache_type cache{};
+        for (auto &v : cache) is >> v;
+        unsigned idx = 0;
+        is >> idx;
+        e.setState(matrix);
+        e.set_result_cache(cache);
+        e.set_result_index(static_cast<std::uint8_t>(idx));
+        return is;
+      }
+    };
+  } // namespace
 
   random_generator::random_generator(std::string name, std::uint64_t seed, mpi::communicator c)
      : buffer_(buffer_size), name_(std::move(name)) {
@@ -68,7 +101,16 @@ namespace triqs::mc_tools {
 
   void random_generator::initialize_rng(std::string const &name, std::uint64_t seed, std::span<std::uint64_t const> spawn_key) {
 
-    // All engines have their full state initialized from the (seed, spawn_key) pair.
+    // chacha: simdrng counter-based generator. Its own splitmix64 expands the seed into the key; the
+    // spawn key (the MPI rank) rides in as the ChaCha nonce, giving decorrelated per-rank streams
+    // without splitmix_seed_seq.
+    if (name == "chacha") {
+      std::uint64_t const nonce = spawn_key.empty() ? 0 : spawn_key.front();
+      ptr_                      = std::make_unique<rng_model<chacha_engine>>(chacha_engine{seed, 0, nonce});
+      return;
+    }
+
+    // All standard-library engines have their full state initialized from the (seed, spawn_key) pair.
     auto sseq = splitmix_seed_seq{seed, spawn_key};
 
     // mt19937_64: native 64-bit engine (default)

@@ -32,8 +32,9 @@ TEST(TRIQSMCTools, RandomGeneratorNames) {
   fmt::print("{}\n", triqs::mc_tools::random_generator_names());
   auto names = triqs::mc_tools::random_generator_names_list();
   fmt::print("{}\n", names);
-  EXPECT_EQ(names.size(), 6);
+  EXPECT_EQ(names.size(), 7);
   EXPECT_EQ(names[0], "mt19937_64");
+  EXPECT_EQ(names.back(), "chacha");
 }
 
 // Verify that the default (empty string) and "mt19937_64" produce the same sequence.
