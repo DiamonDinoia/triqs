@@ -134,3 +134,12 @@ external_dependency(cppdlr
   VERSION 1.1
   GIT_TAG main
 )
+
+# -- simdrng (SIMD RNGs; backs the "chacha" engine in mc_tools/random_generator) --
+# Native/header-only path: SIMDRNG_DISPATCH stays OFF, so ChaCha8Native compiles for the build
+# host's best arch with no runtime-dispatch TU to link. Fetches xsimd + poet via its own CPM.
+# NOTE: simdrng requires cmake >= 3.29 (TRIQS itself only requires 3.20).
+external_dependency(simdrng
+  GIT_REPO https://github.com/DiamonDinoia/simdrng
+  GIT_TAG main
+)

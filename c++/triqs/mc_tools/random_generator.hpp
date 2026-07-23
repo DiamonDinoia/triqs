@@ -127,6 +127,9 @@ namespace triqs::mc_tools {
    * - *ranlux24*: uses `std::ranlux24` (24-bit, combined to 64-bit)
    * - *minstd_rand*: uses `std::minstd_rand` (31-bit, combined to 64-bit)
    * - *knuth_b*: uses `std::knuth_b` (31-bit, combined to 64-bit)
+   * - *chacha*: uses simdrng's SIMD-accelerated ChaCha8 counter-based generator. Seeded directly
+   *   from the seed (its own splitmix64 key expansion) with the MPI rank as the ChaCha nonce, so
+   *   `splitmix_seed_seq` is not used. HDF5 serialization goes through simdrng's state-query API.
    *
    * For performance, raw `uint64_t` values are generated in batches and stored in a buffer.
    * Doubles in [0, 1) are derived using the standard 53-bit technique.

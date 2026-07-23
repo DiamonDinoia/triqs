@@ -95,7 +95,7 @@ struct test {
   void run(int N) {
     using itertools::range;
 
-    triqs::mc_tools::random_generator RNG{};
+    triqs::mc_tools::random_generator RNG{"mt19937_64", 0, mpi::communicator{}};
 
     // Work at fixed order:
     for ([[maybe_unused]] auto i : range(N)) {

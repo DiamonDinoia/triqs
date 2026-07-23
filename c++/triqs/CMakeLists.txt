@@ -78,6 +78,11 @@ target_link_libraries(triqs PUBLIC fmt::fmt-header-only)
 # cppdlr (discrete Lehmann representation library)
 target_link_libraries(triqs PUBLIC cppdlr::cppdlr_c)
 
+# simdrng (backs the "chacha" engine). PRIVATE: only random_generator.cpp uses it, the ChaCha8Native
+# path is header-only (SIMDRNG_DISPATCH=OFF), and keeping it off the public interface avoids dragging
+# simdrng/xsimd/poet into an export set that downstream consumers do not need.
+target_link_libraries(triqs PRIVATE simdrng::simdrng)
+
 # ---------------------------------
 # Boost
 # ---------------------------------
